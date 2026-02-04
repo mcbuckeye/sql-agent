@@ -34,16 +34,13 @@ services:
   sqlagent-frontend:
     build: ./frontend
     container_name: sqlagent-frontend
+    ports:
+      - "3020:80"
     depends_on:
       - sqlagent-backend
     networks:
       - dokploy-network
     restart: unless-stopped
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.sqlagent.rule=Host(`sqlagent.machomelab.com`)"
-      - "traefik.http.routers.sqlagent.entrypoints=web"
-      - "traefik.http.services.sqlagent.loadbalancer.server.port=80"
 
 volumes:
   sqlagent-pgdata:

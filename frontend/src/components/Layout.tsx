@@ -3,7 +3,6 @@ import {
   Database, 
   MessageSquare, 
   History, 
-  Settings, 
   LogOut, 
   Moon, 
   Sun,

@@ -6,8 +6,7 @@ import {
   StarOff,
   Play,
   Copy,
-  Check,
-  Filter
+  Check
 } from 'lucide-react'
 import { queryApi, connectionsApi } from '../lib/api'
 import { LoadingSpinner } from '../components/LoadingSpinner'

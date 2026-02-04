@@ -16,7 +16,7 @@ import { connectionsApi, queryApi, vizApi } from '../lib/api'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { DataTable } from '../components/DataTable'
 import { Chart } from '../components/Chart'
-import type { Connection, Schema, Table, AskResponse, ChartSuggestion } from '../types'
+import type { Connection, Schema, AskResponse, ChartSuggestion } from '../types'
 import clsx from 'clsx'
 
 export function QueryPage() {
@@ -36,7 +36,7 @@ export function QueryPage() {
   
   const [viewMode, setViewMode] = useState<'table' | 'chart'>('table')
   const [chartType, setChartType] = useState<'bar' | 'line' | 'pie' | 'scatter'>('bar')
-  const [chartSuggestions, setChartSuggestions] = useState<ChartSuggestion[]>([])
+  const [, setChartSuggestions] = useState<ChartSuggestion[]>([])
 
   const [suggestions, setSuggestions] = useState<string[]>([])
   const queryInputRef = useRef<HTMLTextAreaElement>(null)

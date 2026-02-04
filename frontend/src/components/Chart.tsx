@@ -23,10 +23,9 @@ interface ChartProps {
   data: Record<string, any>[]
   xKey?: string
   yKey?: string
-  config?: Record<string, any>
 }
 
-export function Chart({ type, data, xKey, yKey, config }: ChartProps) {
+export function Chart({ type, data, xKey, yKey }: ChartProps) {
   if (!data || data.length === 0) {
     return (
       <div className="flex items-center justify-center h-64 text-[var(--text-secondary)]">

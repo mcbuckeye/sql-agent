@@ -148,16 +148,16 @@ export function ConnectionsPage() {
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Database Connections</h1>
+    <div className="p-4 md:p-6 max-w-4xl mx-auto">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <h1 className="text-xl md:text-2xl font-bold">Database Connections</h1>
         <button
           onClick={() => {
             setEditingConnection(null)
             resetForm()
             setShowModal(true)
           }}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors"
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors text-sm md:text-base"
         >
           <Plus className="w-4 h-4" />
           Add Connection
@@ -184,16 +184,16 @@ export function ConnectionsPage() {
           {connections.map((conn) => (
             <div
               key={conn.id}
-              className="bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl p-4"
+              className="bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl p-3 md:p-4"
             >
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-lg bg-indigo-500/10">
-                    <Database className="w-6 h-6 text-indigo-500" />
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                <div className="flex items-center gap-3 md:gap-4">
+                  <div className="p-2 md:p-3 rounded-lg bg-indigo-500/10 flex-shrink-0">
+                    <Database className="w-5 md:w-6 h-5 md:h-6 text-indigo-500" />
                   </div>
-                  <div>
-                    <h3 className="font-semibold">{conn.name}</h3>
-                    <p className="text-sm text-[var(--text-secondary)]">
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-sm md:text-base truncate">{conn.name}</h3>
+                    <p className="text-xs md:text-sm text-[var(--text-secondary)] truncate">
                       <span className="uppercase">{conn.db_type}</span>
                       {conn.host && ` • ${conn.host}:${conn.port}`}
                       {conn.database_name && ` • ${conn.database_name}`}
@@ -213,7 +213,7 @@ export function ConnectionsPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 sm:gap-2 self-end sm:self-start">
                   <button
                     onClick={() => navigate(`/query?connection=${conn.id}`)}
                     className="p-2 rounded-lg hover:bg-[var(--bg-primary)] transition-colors text-[var(--text-secondary)] hover:text-indigo-500"
@@ -311,8 +311,8 @@ export function ConnectionsPage() {
 
           {formData.db_type !== 'sqlite' ? (
             <>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="col-span-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="sm:col-span-2">
                   <label className="block text-sm font-medium mb-2">Host</label>
                   <input
                     type="text"
@@ -344,7 +344,7 @@ export function ConnectionsPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-2">Username</label>
                   <input

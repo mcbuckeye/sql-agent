@@ -10,7 +10,10 @@ import {
   Copy,
   Check,
   BarChart3,
-  Code
+  Code,
+  PanelLeftClose,
+  PanelLeft,
+  X
 } from 'lucide-react'
 import { connectionsApi, queryApi, vizApi } from '../lib/api'
 import { LoadingSpinner } from '../components/LoadingSpinner'
@@ -28,6 +31,7 @@ export function QueryPage() {
   const [schema, setSchema] = useState<Schema | null>(null)
   const [loadingSchema, setLoadingSchema] = useState(false)
   const [expandedTables, setExpandedTables] = useState<Set<string>>(new Set())
+  const [schemaSidebarOpen, setSchemaSidebarOpen] = useState(false)
 
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
@@ -164,17 +168,53 @@ export function QueryPage() {
     : []
 
   return (
-    <div className="flex h-full">
+    <div className="flex flex-col lg:flex-row h-full">
+      {/* Mobile Schema Toggle & Connection Selector */}
+      <div className="lg:hidden p-3 border-b border-[var(--border-color)] bg-[var(--bg-secondary)] flex items-center gap-2">
+        <button
+          onClick={() => setSchemaSidebarOpen(true)}
+          className="p-2 rounded-lg border border-[var(--border-color)] hover:bg-[var(--bg-primary)] transition-colors"
+        >
+          <PanelLeft className="w-5 h-5" />
+        </button>
+        <select
+          value={selectedConnection?.id || ''}
+          onChange={(e) => {
+            const conn = connections.find(c => c.id === parseInt(e.target.value))
+            if (conn) handleSelectConnection(conn)
+          }}
+          className="flex-1 px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+        >
+          <option value="">Select connection...</option>
+          {connections.map((conn) => (
+            <option key={conn.id} value={conn.id}>
+              {conn.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Mobile Schema Sidebar Overlay */}
+      {schemaSidebarOpen && (
+        <div 
+          className="lg:hidden fixed inset-0 bg-black/50 z-40"
+          onClick={() => setSchemaSidebarOpen(false)}
+        />
+      )}
+
       {/* Schema Sidebar */}
-      <aside className="w-72 border-r border-[var(--border-color)] bg-[var(--bg-secondary)] flex flex-col">
-        <div className="p-4 border-b border-[var(--border-color)]">
+      <aside className={clsx(
+        'fixed lg:static inset-y-0 left-0 z-50 w-72 border-r border-[var(--border-color)] bg-[var(--bg-secondary)] flex flex-col transform transition-transform duration-200 ease-in-out',
+        schemaSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+      )}>
+        <div className="p-4 border-b border-[var(--border-color)] flex items-center gap-2">
           <select
             value={selectedConnection?.id || ''}
             onChange={(e) => {
               const conn = connections.find(c => c.id === parseInt(e.target.value))
               if (conn) handleSelectConnection(conn)
             }}
-            className="w-full px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+            className="flex-1 px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
           >
             <option value="">Select connection...</option>
             {connections.map((conn) => (
@@ -183,6 +223,12 @@ export function QueryPage() {
               </option>
             ))}
           </select>
+          <button
+            onClick={() => setSchemaSidebarOpen(false)}
+            className="lg:hidden p-2 rounded-lg hover:bg-[var(--bg-primary)] transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         <div className="flex items-center justify-between px-4 py-2 text-sm text-[var(--text-secondary)]">
@@ -261,9 +307,9 @@ export function QueryPage() {
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         {/* Query Input */}
-        <div className="p-4 border-b border-[var(--border-color)]">
+        <div className="p-3 md:p-4 border-b border-[var(--border-color)]">
           <form onSubmit={handleSubmit} className="flex gap-2">
             <textarea
               ref={queryInputRef}
@@ -272,7 +318,7 @@ export function QueryPage() {
               placeholder="Ask a question about your data..."
               disabled={!selectedConnection}
               rows={2}
-              className="flex-1 px-4 py-3 rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none disabled:opacity-50"
+              className="flex-1 px-3 md:px-4 py-2 md:py-3 rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none disabled:opacity-50 text-sm md:text-base"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault()
@@ -283,7 +329,7 @@ export function QueryPage() {
             <button
               type="submit"
               disabled={!selectedConnection || !query.trim() || loading}
-              className="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed self-end"
+              className="px-3 md:px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed self-end"
             >
               {loading ? (
                 <LoadingSpinner size="sm" />
@@ -302,7 +348,7 @@ export function QueryPage() {
                   <button
                     key={i}
                     onClick={() => handleSuggestionClick(sugg)}
-                    className="px-3 py-1.5 text-sm rounded-full bg-[var(--bg-secondary)] hover:bg-indigo-500/10 hover:text-indigo-500 transition-colors"
+                    className="px-2 md:px-3 py-1 md:py-1.5 text-xs md:text-sm rounded-full bg-[var(--bg-secondary)] hover:bg-indigo-500/10 hover:text-indigo-500 transition-colors"
                   >
                     {sugg}
                   </button>
@@ -313,28 +359,28 @@ export function QueryPage() {
         </div>
 
         {/* Results */}
-        <div className="flex-1 overflow-auto p-4">
+        <div className="flex-1 overflow-auto p-3 md:p-4">
           {!selectedConnection ? (
             <div className="flex flex-col items-center justify-center h-full text-[var(--text-secondary)]">
-              <Database className="w-16 h-16 mb-4" />
-              <p>Select a database connection to get started</p>
+              <Database className="w-12 md:w-16 h-12 md:h-16 mb-4" />
+              <p className="text-sm md:text-base text-center">Select a database connection to get started</p>
             </div>
           ) : !result ? (
             <div className="flex flex-col items-center justify-center h-full text-[var(--text-secondary)]">
-              <Send className="w-16 h-16 mb-4" />
-              <p>Ask a question about your data</p>
+              <Send className="w-12 md:w-16 h-12 md:h-16 mb-4" />
+              <p className="text-sm md:text-base text-center">Ask a question about your data</p>
             </div>
           ) : result.error ? (
-            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-red-500">
-              <p className="font-medium mb-2">Error</p>
-              <p>{result.error}</p>
+            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 md:p-4 text-red-500">
+              <p className="font-medium mb-2 text-sm md:text-base">Error</p>
+              <p className="text-sm">{result.error}</p>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3 md:space-y-4">
               {/* SQL & Explanation */}
               <div className="bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--border-color)]">
-                  <div className="flex items-center gap-2 text-sm">
+                <div className="flex items-center justify-between px-3 md:px-4 py-2 border-b border-[var(--border-color)]">
+                  <div className="flex items-center gap-2 text-xs md:text-sm">
                     <Code className="w-4 h-4 text-indigo-500" />
                     <span className="font-medium">Generated SQL</span>
                   </div>
@@ -349,11 +395,11 @@ export function QueryPage() {
                     )}
                   </button>
                 </div>
-                <pre className="p-4 overflow-x-auto text-sm">
+                <pre className="p-3 md:p-4 overflow-x-auto text-xs md:text-sm">
                   <code>{result.sql}</code>
                 </pre>
                 {result.explanation && (
-                  <div className="px-4 py-3 border-t border-[var(--border-color)] bg-[var(--bg-primary)] text-sm text-[var(--text-secondary)]">
+                  <div className="px-3 md:px-4 py-2 md:py-3 border-t border-[var(--border-color)] bg-[var(--bg-primary)] text-xs md:text-sm text-[var(--text-secondary)]">
                     {result.explanation}
                   </div>
                 )}
@@ -361,7 +407,7 @@ export function QueryPage() {
 
               {/* Results Info */}
               {result.row_count !== undefined && (
-                <div className="flex items-center gap-4 text-sm text-[var(--text-secondary)]">
+                <div className="flex flex-wrap items-center gap-2 md:gap-4 text-xs md:text-sm text-[var(--text-secondary)]">
                   <span>{result.row_count} rows</span>
                   {result.execution_time_ms && (
                     <span>{result.execution_time_ms}ms</span>
@@ -373,7 +419,7 @@ export function QueryPage() {
                       <button
                         onClick={() => setViewMode('table')}
                         className={clsx(
-                          'px-3 py-1 rounded text-sm transition-colors',
+                          'px-2 md:px-3 py-1 rounded text-sm transition-colors',
                           viewMode === 'table'
                             ? 'bg-[var(--bg-primary)] text-[var(--text-primary)]'
                             : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -384,7 +430,7 @@ export function QueryPage() {
                       <button
                         onClick={() => setViewMode('chart')}
                         className={clsx(
-                          'px-3 py-1 rounded text-sm transition-colors',
+                          'px-2 md:px-3 py-1 rounded text-sm transition-colors',
                           viewMode === 'chart'
                             ? 'bg-[var(--bg-primary)] text-[var(--text-primary)]'
                             : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -402,15 +448,15 @@ export function QueryPage() {
                 viewMode === 'table' ? (
                   <DataTable columns={result.columns} rows={result.rows} />
                 ) : (
-                  <div className="bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg p-4">
+                  <div className="bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg p-3 md:p-4">
                     {/* Chart Type Selector */}
-                    <div className="flex items-center gap-2 mb-4">
+                    <div className="flex flex-wrap items-center gap-2 mb-4">
                       {['bar', 'line', 'pie', 'scatter'].map((type) => (
                         <button
                           key={type}
                           onClick={() => setChartType(type as any)}
                           className={clsx(
-                            'px-3 py-1.5 rounded text-sm capitalize transition-colors',
+                            'px-2 md:px-3 py-1 md:py-1.5 rounded text-xs md:text-sm capitalize transition-colors',
                             chartType === type
                               ? 'bg-indigo-500 text-white'
                               : 'bg-[var(--bg-primary)] hover:bg-indigo-500/10'

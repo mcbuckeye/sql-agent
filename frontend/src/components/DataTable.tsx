@@ -49,22 +49,22 @@ export function DataTable({ columns, rows, maxRows = 100 }: DataTableProps) {
   }
 
   return (
-    <div className="overflow-auto border border-[var(--border-color)] rounded-lg">
-      <table className="w-full text-sm">
+    <div className="overflow-auto border border-[var(--border-color)] rounded-lg -mx-3 md:mx-0">
+      <table className="w-full text-xs md:text-sm min-w-[400px]">
         <thead>
           <tr className="bg-[var(--bg-secondary)] border-b border-[var(--border-color)]">
             {columns.map((col, i) => (
               <th
                 key={i}
                 onClick={() => handleSort(i)}
-                className="px-4 py-3 text-left font-medium text-[var(--text-secondary)] cursor-pointer hover:bg-[var(--bg-primary)] transition-colors"
+                className="px-2 md:px-4 py-2 md:py-3 text-left font-medium text-[var(--text-secondary)] cursor-pointer hover:bg-[var(--bg-primary)] transition-colors whitespace-nowrap"
               >
                 <div className="flex items-center gap-1">
                   {col}
                   {sortColumn === i && (
                     sortDirection === 'asc' 
-                      ? <ChevronUp className="w-4 h-4" />
-                      : <ChevronDown className="w-4 h-4" />
+                      ? <ChevronUp className="w-3 md:w-4 h-3 md:h-4" />
+                      : <ChevronDown className="w-3 md:w-4 h-3 md:h-4" />
                   )}
                 </div>
               </th>
@@ -82,7 +82,7 @@ export function DataTable({ columns, rows, maxRows = 100 }: DataTableProps) {
                 return (
                   <td
                     key={cellIndex}
-                    className="px-4 py-3 group relative"
+                    className="px-2 md:px-4 py-2 md:py-3 group relative"
                   >
                     <div className="flex items-center gap-2">
                       <span className={clsx(

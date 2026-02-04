@@ -11,7 +11,6 @@ import {
   Check,
   BarChart3,
   Code,
-  PanelLeftClose,
   PanelLeft,
   X
 } from 'lucide-react'

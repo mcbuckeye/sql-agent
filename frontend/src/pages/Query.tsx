@@ -47,6 +47,19 @@ export function QueryPage() {
   // Editable SQL state
   const [editableSql, setEditableSql] = useState('')
   const [isEditing, setIsEditing] = useState(false)
+  
+  // Parameter state
+  const [detectedParams, setDetectedParams] = useState<Array<{
+    name: string
+    label: string
+    type: string
+    description?: string
+    default?: any
+    required: boolean
+  }>>([])
+  const [paramValues, setParamValues] = useState<Record<string, any>>({})
+  const [showParamDialog, setShowParamDialog] = useState(false)
+  const [pendingQuery, setPendingQuery] = useState('')
 
   useEffect(() => {
     fetchConnections()
@@ -129,9 +142,54 @@ export function QueryPage() {
     setLoading(true)
     setResult(null)
     setChartSuggestions([])
+    setDetectedParams([])
+    setShowParamDialog(false)
 
     try {
-      const response = await queryApi.ask(selectedConnection.id, query.trim())
+      // First, detect if parameters are needed
+      const paramResult = await queryApi.detectParameters(selectedConnection.id, query.trim())
+      
+      if (paramResult.needs_parameters && paramResult.parameters.length > 0) {
+        // Show parameter dialog
+        setDetectedParams(paramResult.parameters)
+        // Set default values
+        const defaults: Record<string, any> = {}
+        paramResult.parameters.forEach(p => {
+          if (p.default !== null && p.default !== undefined) {
+            defaults[p.name] = p.default
+          } else if (p.type === 'date') {
+            // Default to today for dates
+            defaults[p.name] = new Date().toISOString().split('T')[0]
+          }
+        })
+        setParamValues(defaults)
+        setPendingQuery(query.trim())
+        setShowParamDialog(true)
+        setLoading(false)
+        return
+      }
+      
+      // No parameters needed, execute directly
+      await executeWithParams(query.trim(), null)
+    } catch (err: any) {
+      const responseData = err.response?.data
+      setResult({
+        sql: responseData?.sql || '',
+        explanation: responseData?.explanation || '',
+        error: responseData?.error || responseData?.detail || err.message || 'Query failed'
+      })
+      setLoading(false)
+    }
+  }
+  
+  const executeWithParams = async (naturalLanguage: string, params: Record<string, any> | null) => {
+    if (!selectedConnection) return
+    
+    setLoading(true)
+    setShowParamDialog(false)
+    
+    try {
+      const response = await queryApi.ask(selectedConnection.id, naturalLanguage, true, params || undefined)
       setResult(response)
 
       // Get chart suggestions if we have results
@@ -145,7 +203,6 @@ export function QueryPage() {
         } catch {}
       }
     } catch (err: any) {
-      // Check if response contains SQL even though there was an error
       const responseData = err.response?.data
       setResult({
         sql: responseData?.sql || '',
@@ -154,6 +211,12 @@ export function QueryPage() {
       })
     } finally {
       setLoading(false)
+    }
+  }
+  
+  const handleParamSubmit = () => {
+    if (pendingQuery) {
+      executeWithParams(pendingQuery, paramValues)
     }
   }
 
@@ -395,7 +458,7 @@ export function QueryPage() {
           </form>
 
           {/* Suggestions */}
-          {suggestions.length > 0 && !result && (
+          {suggestions.length > 0 && !result && !showParamDialog && (
             <div className="mt-3">
               <p className="text-xs text-[var(--text-secondary)] mb-2">Try asking:</p>
               <div className="flex flex-wrap gap-2">
@@ -408,6 +471,56 @@ export function QueryPage() {
                     {sugg}
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+          
+          {/* Parameter Dialog */}
+          {showParamDialog && detectedParams.length > 0 && (
+            <div className="mt-3 p-4 bg-[var(--bg-secondary)] border border-indigo-500/30 rounded-lg">
+              <h3 className="font-medium text-sm mb-3 flex items-center gap-2">
+                <span className="w-2 h-2 bg-indigo-500 rounded-full"></span>
+                Specify Parameters
+              </h3>
+              <div className="space-y-3">
+                {detectedParams.map((param) => (
+                  <div key={param.name} className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-[var(--text-secondary)]">
+                      {param.label}
+                      {param.required && <span className="text-red-500 ml-1">*</span>}
+                    </label>
+                    {param.description && (
+                      <p className="text-xs text-[var(--text-secondary)] opacity-70">{param.description}</p>
+                    )}
+                    <input
+                      type={param.type === 'date' ? 'date' : param.type === 'number' ? 'number' : 'text'}
+                      value={paramValues[param.name] || ''}
+                      onChange={(e) => setParamValues(prev => ({
+                        ...prev,
+                        [param.name]: param.type === 'number' ? Number(e.target.value) : e.target.value
+                      }))}
+                      className="px-3 py-2 rounded border border-[var(--border-color)] bg-[var(--bg-primary)] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={handleParamSubmit}
+                  disabled={loading || detectedParams.some(p => p.required && !paramValues[p.name])}
+                  className="px-4 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 transition-colors disabled:opacity-50 text-sm"
+                >
+                  {loading ? 'Running...' : 'Run Query'}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowParamDialog(false)
+                    setDetectedParams([])
+                  }}
+                  className="px-4 py-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors text-sm"
+                >
+                  Cancel
+                </button>
               </div>
             </div>
           )}
@@ -451,15 +564,22 @@ export function QueryPage() {
                       )}
                     </button>
                   </div>
-                  <textarea
-                    value={editableSql}
-                    onChange={(e) => {
-                      setEditableSql(e.target.value)
-                      setIsEditing(e.target.value !== result.sql)
-                    }}
-                    className="w-full p-3 md:p-4 font-mono text-xs md:text-sm bg-transparent resize-none focus:outline-none"
-                    rows={Math.min(Math.max(editableSql.split('\n').length + 1, 3), 15)}
-                  />
+                  <div className="relative">
+                    <textarea
+                      value={editableSql}
+                      onChange={(e) => {
+                        setEditableSql(e.target.value)
+                        setIsEditing(e.target.value !== result.sql)
+                      }}
+                      className="w-full p-3 md:p-4 font-mono text-xs md:text-sm bg-[var(--bg-primary)] resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500/50 rounded cursor-text"
+                      rows={Math.min(Math.max(editableSql.split('\n').length + 1, 3), 15)}
+                    />
+                    {!isEditing && (
+                      <div className="absolute bottom-2 right-2 text-xs text-[var(--text-secondary)] opacity-50 pointer-events-none">
+                        Click to edit
+                      </div>
+                    )}
+                  </div>
                   {result.explanation && (
                     <div className="px-3 md:px-4 py-2 md:py-3 border-t border-[var(--border-color)] bg-[var(--bg-primary)] text-xs md:text-sm text-[var(--text-secondary)]">
                       {result.explanation}
@@ -519,15 +639,23 @@ export function QueryPage() {
                     )}
                   </button>
                 </div>
-                <textarea
-                  value={editableSql}
-                  onChange={(e) => {
-                    setEditableSql(e.target.value)
-                    setIsEditing(e.target.value !== result.sql)
-                  }}
-                  className="w-full p-3 md:p-4 font-mono text-xs md:text-sm bg-transparent resize-none focus:outline-none"
-                  rows={Math.min(Math.max(editableSql.split('\n').length + 1, 3), 15)}
-                />
+                <div className="relative">
+                  <textarea
+                    value={editableSql}
+                    onChange={(e) => {
+                      setEditableSql(e.target.value)
+                      setIsEditing(e.target.value !== result.sql)
+                    }}
+                    className="w-full p-3 md:p-4 font-mono text-xs md:text-sm bg-[var(--bg-primary)] resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500/50 rounded cursor-text"
+                    rows={Math.min(Math.max(editableSql.split('\n').length + 1, 3), 15)}
+                    placeholder="SQL will appear here..."
+                  />
+                  {!isEditing && (
+                    <div className="absolute bottom-2 right-2 text-xs text-[var(--text-secondary)] opacity-50 pointer-events-none">
+                      Click to edit
+                    </div>
+                  )}
+                </div>
                 {result.explanation && (
                   <div className="px-3 md:px-4 py-2 md:py-3 border-t border-[var(--border-color)] bg-[var(--bg-primary)] text-xs md:text-sm text-[var(--text-secondary)]">
                     {result.explanation}

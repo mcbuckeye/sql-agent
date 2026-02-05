@@ -104,11 +104,32 @@ export const queryApi = {
     })
     return res.data
   },
-  ask: async (connectionId: number, naturalLanguage: string, autoExecute: boolean = true): Promise<AskResponse> => {
+  ask: async (connectionId: number, naturalLanguage: string, autoExecute: boolean = true, parameters?: Record<string, any>): Promise<AskResponse> => {
     const res = await api.post('/query/ask', {
       connection_id: connectionId,
       natural_language: naturalLanguage,
-      auto_execute: autoExecute
+      auto_execute: autoExecute,
+      parameters
+    })
+    return res.data
+  },
+  
+  detectParameters: async (connectionId: number, naturalLanguage: string): Promise<{
+    needs_parameters: boolean
+    parameters: Array<{
+      name: string
+      label: string
+      type: string
+      description?: string
+      default?: any
+      required: boolean
+      options?: string[]
+    }>
+    clarification?: string
+  }> => {
+    const res = await api.post('/query/detect-parameters', {
+      connection_id: connectionId,
+      natural_language: naturalLanguage
     })
     return res.data
   },

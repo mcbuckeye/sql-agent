@@ -1,4 +1,4 @@
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from openai import OpenAI
 from app.config import get_settings
 
@@ -11,7 +11,58 @@ class SQLGenerator:
     def __init__(self):
         self.client = OpenAI(api_key=settings.openai_api_key)
     
-    def generate_sql(self, natural_language: str, schema: Dict[str, Any], db_type: str = "postgres") -> Dict[str, str]:
+    def detect_parameters(self, natural_language: str, schema: Dict[str, Any]) -> Dict[str, Any]:
+        """Detect if the query requires user-specified parameters."""
+        import json
+        
+        tables = schema.get("tables", [])
+        
+        # Get brief schema context
+        if len(tables) > 50:
+            relevant_tables = self._select_relevant_tables(natural_language, tables)
+            filtered_schema = {"tables": [t for t in tables if t["name"] in relevant_tables]}
+            schema_text = self._format_schema(filtered_schema)
+        else:
+            schema_text = self._format_schema(schema)
+        
+        system_prompt = f"""Analyze this natural language query to identify any parameters that need to be specified by the user before generating SQL.
+
+Database Schema:
+{schema_text}
+
+Look for:
+- Time periods (e.g., "over a specified time period", "between dates", "last N months")
+- Specific values to filter by (e.g., "for a specific customer", "a given product")
+- Numeric thresholds (e.g., "greater than X", "top N")
+- Any placeholder or variable mentioned
+
+For each parameter found, provide:
+- name: short identifier (e.g., "start_date", "customer_id", "limit")
+- label: user-friendly label (e.g., "Start Date", "Customer", "Number of Results")
+- type: one of "date", "datetime", "text", "number", "select"
+- description: brief explanation of what this parameter is for
+- default: suggested default value if appropriate (null if none)
+- required: true/false
+
+If the query is clear and needs no parameters, return empty parameters array.
+
+Respond in JSON format:
+{{"needs_parameters": true/false, "parameters": [...], "clarification": "optional message if query is ambiguous"}}"""
+
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": natural_language}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0
+        )
+        
+        result = json.loads(response.choices[0].message.content)
+        return result
+    
+    def generate_sql(self, natural_language: str, schema: Dict[str, Any], db_type: str = "postgres", parameters: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
         """Generate SQL from natural language query."""
         import json
         
@@ -27,13 +78,21 @@ class SQLGenerator:
         else:
             schema_text = self._format_schema(schema)
         
+        # Build parameter context if provided
+        param_context = ""
+        if parameters:
+            param_lines = ["User-provided parameter values:"]
+            for key, value in parameters.items():
+                param_lines.append(f"- {key}: {value}")
+            param_context = "\n" + "\n".join(param_lines) + "\n"
+        
         system_prompt = f"""You are a SQL expert. Generate SQL queries based on natural language questions.
 
 Database type: {db_type}
 
 Database Schema:
 {schema_text}
-
+{param_context}
 Rules:
 1. Generate valid SQL for {db_type}
 2. Use appropriate JOIN types when needed
@@ -43,6 +102,7 @@ Rules:
 6. Be careful with NULL handling
 7. Only generate SELECT queries (read-only)
 8. For MSSQL, use TOP instead of LIMIT
+9. If user-provided parameter values are given above, USE THEM in the query (e.g., for date ranges, filters, limits)
 
 Respond in JSON format:
 {{"sql": "YOUR SQL QUERY", "explanation": "Brief explanation of what the query does"}}"""

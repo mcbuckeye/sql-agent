@@ -122,6 +122,29 @@ class AskQueryRequest(BaseModel):
     connection_id: int
     natural_language: str
     auto_execute: bool = True
+    parameters: Optional[dict] = None  # User-provided parameter values
+
+
+# Parameter detection schemas
+class QueryParameter(BaseModel):
+    name: str
+    label: str
+    type: str  # "date", "datetime", "text", "number", "select"
+    description: Optional[str] = None
+    default: Optional[Any] = None
+    required: bool = True
+    options: Optional[List[str]] = None  # For "select" type
+
+
+class DetectParametersRequest(BaseModel):
+    connection_id: int
+    natural_language: str
+
+
+class DetectParametersResponse(BaseModel):
+    needs_parameters: bool
+    parameters: List[QueryParameter]
+    clarification: Optional[str] = None
 
 
 class AskQueryResponse(BaseModel):

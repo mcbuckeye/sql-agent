@@ -14,7 +14,10 @@ from app.schemas import (
     AskQueryResponse,
     QueryHistoryResponse,
     QueryFeedbackCreate,
-    QueryFeedbackResponse
+    QueryFeedbackResponse,
+    DetectParametersRequest,
+    DetectParametersResponse,
+    QueryParameter
 )
 from app.services.auth import get_current_user
 from app.services.database_connector import DatabaseConnector
@@ -61,6 +64,43 @@ def generate_query(
     return GenerateQueryResponse(
         sql=result["sql"],
         explanation=result["explanation"]
+    )
+
+
+@router.post("/detect-parameters", response_model=DetectParametersResponse)
+def detect_parameters(
+    request: DetectParametersRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Detect if a query requires user-specified parameters."""
+    connection = db.query(Connection).filter(
+        Connection.id == request.connection_id,
+        Connection.user_id == current_user.id
+    ).first()
+    
+    if not connection:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    
+    # Get schema
+    cache = db.query(SchemaCache).filter(
+        SchemaCache.connection_id == request.connection_id
+    ).first()
+    
+    if not cache or not cache.schema_json:
+        connector = DatabaseConnector(connection)
+        schema_data = connector.get_schema()
+    else:
+        schema_data = cache.schema_json
+    
+    # Detect parameters
+    generator = SQLGenerator()
+    result = generator.detect_parameters(request.natural_language, schema_data)
+    
+    return DetectParametersResponse(
+        needs_parameters=result.get("needs_parameters", False),
+        parameters=[QueryParameter(**p) for p in result.get("parameters", [])],
+        clarification=result.get("clarification")
     )
 
 
@@ -146,12 +186,13 @@ def ask_query(
     else:
         schema_data = cache.schema_json
     
-    # Generate SQL
+    # Generate SQL with any provided parameters
     generator = SQLGenerator()
     gen_result = generator.generate_sql(
         request.natural_language,
         schema_data,
-        connection.db_type
+        connection.db_type,
+        parameters=request.parameters
     )
     
     response = AskQueryResponse(

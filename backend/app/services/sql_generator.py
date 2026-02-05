@@ -13,9 +13,19 @@ class SQLGenerator:
     
     def generate_sql(self, natural_language: str, schema: Dict[str, Any], db_type: str = "postgres") -> Dict[str, str]:
         """Generate SQL from natural language query."""
+        import json
         
-        # Build schema context
-        schema_text = self._format_schema(schema)
+        tables = schema.get("tables", [])
+        
+        # If schema is large (>50 tables), first select relevant tables
+        if len(tables) > 50:
+            relevant_tables = self._select_relevant_tables(natural_language, tables)
+            filtered_schema = {
+                "tables": [t for t in tables if t["name"] in relevant_tables]
+            }
+            schema_text = self._format_schema(filtered_schema)
+        else:
+            schema_text = self._format_schema(schema)
         
         system_prompt = f"""You are a SQL expert. Generate SQL queries based on natural language questions.
 
@@ -32,6 +42,7 @@ Rules:
 5. Use proper date/time functions for the database type
 6. Be careful with NULL handling
 7. Only generate SELECT queries (read-only)
+8. For MSSQL, use TOP instead of LIMIT
 
 Respond in JSON format:
 {{"sql": "YOUR SQL QUERY", "explanation": "Brief explanation of what the query does"}}"""
@@ -46,13 +57,50 @@ Respond in JSON format:
             temperature=0.1
         )
         
-        import json
         result = json.loads(response.choices[0].message.content)
         
         return {
             "sql": result.get("sql", ""),
             "explanation": result.get("explanation", "")
         }
+    
+    def _select_relevant_tables(self, query: str, tables: List[Dict]) -> List[str]:
+        """Select relevant tables for a query from a large schema."""
+        import json
+        
+        # Format just table names with brief column summary
+        table_list = []
+        for t in tables:
+            cols = [c["name"] for c in t.get("columns", [])[:5]]
+            cols_str = ", ".join(cols)
+            if len(t.get("columns", [])) > 5:
+                cols_str += f", ... ({len(t['columns'])} total)"
+            table_list.append(f"- {t['name']}: {cols_str}")
+        
+        tables_text = "\n".join(table_list)
+        
+        system_prompt = f"""Given a user's natural language query and a list of database tables, identify which tables are likely relevant.
+
+Available tables:
+{tables_text}
+
+Return a JSON object with the table names that would be needed to answer the query.
+Select 1-10 most relevant tables.
+
+{{"relevant_tables": ["table1", "table2", ...]}}"""
+
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",  # Use mini for table selection (cheaper, faster)
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": query}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0
+        )
+        
+        result = json.loads(response.choices[0].message.content)
+        return result.get("relevant_tables", [])
     
     def _format_schema(self, schema: Dict[str, Any]) -> str:
         """Format schema for LLM context."""
@@ -84,7 +132,19 @@ Respond in JSON format:
     
     def suggest_queries(self, schema: Dict[str, Any]) -> List[str]:
         """Suggest useful queries based on schema."""
-        schema_text = self._format_schema(schema)
+        import json
+        
+        tables = schema.get("tables", [])
+        
+        # For large schemas, just use table names and brief column info
+        if len(tables) > 50:
+            table_list = []
+            for t in tables[:100]:  # Limit to first 100 tables
+                cols = [c["name"] for c in t.get("columns", [])[:3]]
+                table_list.append(f"- {t['name']}: {', '.join(cols)}...")
+            schema_text = "Tables (showing first 100):\n" + "\n".join(table_list)
+        else:
+            schema_text = self._format_schema(schema)
         
         system_prompt = f"""Based on this database schema, suggest 5 useful analytical queries a user might want to run.
 
@@ -95,7 +155,7 @@ Respond in JSON format:
 {{"suggestions": ["suggestion 1", "suggestion 2", ...]}}"""
 
         response = self.client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",  # Use mini for suggestions
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": "What are some useful queries I could run?"}
@@ -104,7 +164,6 @@ Respond in JSON format:
             temperature=0.7
         )
         
-        import json
         result = json.loads(response.choices[0].message.content)
         
         return result.get("suggestions", [])

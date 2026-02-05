@@ -181,3 +181,23 @@ class SavedVisualizationResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+# Query Feedback schemas
+class QueryFeedbackCreate(BaseModel):
+    connection_id: int
+    natural_language: str
+    original_sql: str
+    corrected_sql: str
+
+
+class QueryFeedbackResponse(BaseModel):
+    id: int
+    connection_id: int
+    natural_language: str
+    original_sql: str
+    corrected_sql: str
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True

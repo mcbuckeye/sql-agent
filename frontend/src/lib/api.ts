@@ -126,6 +126,16 @@ export const queryApi = {
   suggestions: async (connectionId: number): Promise<string[]> => {
     const res = await api.get(`/query/suggestions?connection_id=${connectionId}`)
     return res.data.suggestions
+  },
+
+  submitFeedback: async (data: {
+    connection_id: number
+    natural_language: string
+    original_sql: string
+    corrected_sql: string
+  }) => {
+    const res = await api.post('/query/feedback', data)
+    return res.data
   }
 }
 

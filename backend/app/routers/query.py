@@ -4,7 +4,7 @@ from typing import List, Optional
 from app.database import get_db
 from app.models.user import User
 from app.models.connection import Connection, SchemaCache
-from app.models.query import QueryHistory
+from app.models.query import QueryHistory, QueryFeedback
 from app.schemas import (
     GenerateQueryRequest,
     GenerateQueryResponse,
@@ -12,7 +12,9 @@ from app.schemas import (
     ExecuteQueryResponse,
     AskQueryRequest,
     AskQueryResponse,
-    QueryHistoryResponse
+    QueryHistoryResponse,
+    QueryFeedbackCreate,
+    QueryFeedbackResponse
 )
 from app.services.auth import get_current_user
 from app.services.database_connector import DatabaseConnector
@@ -263,3 +265,49 @@ def get_suggestions(
     suggestions = generator.suggest_queries(cache.schema_json)
     
     return {"suggestions": suggestions}
+
+
+@router.post("/feedback", response_model=QueryFeedbackResponse)
+def submit_feedback(
+    request: QueryFeedbackCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Store user's SQL correction for learning."""
+    # Verify connection belongs to user
+    connection = db.query(Connection).filter(
+        Connection.id == request.connection_id,
+        Connection.user_id == current_user.id
+    ).first()
+    
+    if not connection:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    
+    feedback = QueryFeedback(
+        user_id=current_user.id,
+        connection_id=request.connection_id,
+        natural_language=request.natural_language,
+        original_sql=request.original_sql,
+        corrected_sql=request.corrected_sql
+    )
+    db.add(feedback)
+    db.commit()
+    db.refresh(feedback)
+    return feedback
+
+
+@router.get("/feedback", response_model=List[QueryFeedbackResponse])
+def get_feedback(
+    connection_id: Optional[int] = None,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get stored feedback for few-shot learning."""
+    query = db.query(QueryFeedback).filter(
+        QueryFeedback.user_id == current_user.id
+    )
+    if connection_id:
+        query = query.filter(QueryFeedback.connection_id == connection_id)
+    
+    return query.order_by(QueryFeedback.created_at.desc()).limit(limit).all()

@@ -9,7 +9,7 @@ from app.routers import auth, connections, query, visualizations
 # Import all models to register them
 from app.models.user import User
 from app.models.connection import Connection, SchemaCache
-from app.models.query import QueryHistory, SavedVisualization
+from app.models.query import QueryHistory, SavedVisualization, QueryFeedback
 
 
 def init_db():

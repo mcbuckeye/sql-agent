@@ -44,9 +44,21 @@ export function QueryPage() {
   const [suggestions, setSuggestions] = useState<string[]>([])
   const queryInputRef = useRef<HTMLTextAreaElement>(null)
 
+  // Editable SQL state
+  const [editableSql, setEditableSql] = useState('')
+  const [isEditing, setIsEditing] = useState(false)
+
   useEffect(() => {
     fetchConnections()
   }, [])
+
+  // Sync editable SQL with result
+  useEffect(() => {
+    if (result?.sql) {
+      setEditableSql(result.sql)
+      setIsEditing(false)
+    }
+  }, [result?.sql])
 
   useEffect(() => {
     if (connections.length > 0 && initialConnectionId) {
@@ -152,9 +164,51 @@ export function QueryPage() {
 
   const copySql = async () => {
     if (!result?.sql) return
-    await navigator.clipboard.writeText(result.sql)
+    await navigator.clipboard.writeText(editableSql || result.sql)
     setCopiedSql(true)
     setTimeout(() => setCopiedSql(false), 2000)
+  }
+
+  const handleRunModifiedSql = async () => {
+    if (!selectedConnection || !editableSql.trim()) return
+    setLoading(true)
+
+    try {
+      const execResult = await queryApi.execute(selectedConnection.id, editableSql.trim())
+
+      // Update result with new data while keeping explanation
+      setResult(prev => ({
+        ...prev!,
+        columns: execResult.columns,
+        rows: execResult.rows,
+        row_count: execResult.row_count,
+        execution_time_ms: execResult.execution_time_ms,
+        error: undefined
+      }))
+
+      // Submit feedback if SQL was corrected
+      if (isEditing && result?.sql) {
+        try {
+          await queryApi.submitFeedback({
+            connection_id: selectedConnection.id,
+            natural_language: query,
+            original_sql: result.sql,
+            corrected_sql: editableSql.trim()
+          })
+        } catch (feedbackErr) {
+          console.error('Failed to submit feedback:', feedbackErr)
+        }
+      }
+
+      setIsEditing(false)
+    } catch (err: any) {
+      setResult(prev => ({
+        ...prev!,
+        error: err.response?.data?.detail || err.message || 'Execution failed'
+      }))
+    } finally {
+      setLoading(false)
+    }
   }
 
   // Convert result to chart data
@@ -380,6 +434,11 @@ export function QueryPage() {
                     <div className="flex items-center gap-2 text-xs md:text-sm">
                       <Code className="w-4 h-4 text-indigo-500" />
                       <span className="font-medium">Generated SQL</span>
+                      {isEditing && (
+                        <span className="px-2 py-0.5 text-xs bg-amber-500/10 text-amber-500 rounded">
+                          Modified
+                        </span>
+                      )}
                     </div>
                     <button
                       onClick={copySql}
@@ -392,12 +451,38 @@ export function QueryPage() {
                       )}
                     </button>
                   </div>
-                  <pre className="p-3 md:p-4 overflow-x-auto text-xs md:text-sm">
-                    <code>{result.sql}</code>
-                  </pre>
+                  <textarea
+                    value={editableSql}
+                    onChange={(e) => {
+                      setEditableSql(e.target.value)
+                      setIsEditing(e.target.value !== result.sql)
+                    }}
+                    className="w-full p-3 md:p-4 font-mono text-xs md:text-sm bg-transparent resize-none focus:outline-none"
+                    rows={Math.min(Math.max(editableSql.split('\n').length + 1, 3), 15)}
+                  />
                   {result.explanation && (
                     <div className="px-3 md:px-4 py-2 md:py-3 border-t border-[var(--border-color)] bg-[var(--bg-primary)] text-xs md:text-sm text-[var(--text-secondary)]">
                       {result.explanation}
+                    </div>
+                  )}
+                  {isEditing && (
+                    <div className="px-3 md:px-4 py-2 border-t border-[var(--border-color)] flex items-center gap-2">
+                      <button
+                        onClick={handleRunModifiedSql}
+                        disabled={loading}
+                        className="px-3 py-1.5 text-sm bg-indigo-500 text-white rounded hover:bg-indigo-600 transition-colors disabled:opacity-50"
+                      >
+                        {loading ? 'Running...' : 'Run Modified SQL'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditableSql(result.sql || '')
+                          setIsEditing(false)
+                        }}
+                        className="px-3 py-1.5 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                      >
+                        Reset
+                      </button>
                     </div>
                   )}
                 </div>
@@ -411,12 +496,17 @@ export function QueryPage() {
             </div>
           ) : (
             <div className="space-y-3 md:space-y-4">
-              {/* SQL & Explanation */}
+              {/* SQL & Explanation - Editable */}
               <div className="bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg overflow-hidden">
                 <div className="flex items-center justify-between px-3 md:px-4 py-2 border-b border-[var(--border-color)]">
                   <div className="flex items-center gap-2 text-xs md:text-sm">
                     <Code className="w-4 h-4 text-indigo-500" />
                     <span className="font-medium">Generated SQL</span>
+                    {isEditing && (
+                      <span className="px-2 py-0.5 text-xs bg-amber-500/10 text-amber-500 rounded">
+                        Modified
+                      </span>
+                    )}
                   </div>
                   <button
                     onClick={copySql}
@@ -429,12 +519,38 @@ export function QueryPage() {
                     )}
                   </button>
                 </div>
-                <pre className="p-3 md:p-4 overflow-x-auto text-xs md:text-sm">
-                  <code>{result.sql}</code>
-                </pre>
+                <textarea
+                  value={editableSql}
+                  onChange={(e) => {
+                    setEditableSql(e.target.value)
+                    setIsEditing(e.target.value !== result.sql)
+                  }}
+                  className="w-full p-3 md:p-4 font-mono text-xs md:text-sm bg-transparent resize-none focus:outline-none"
+                  rows={Math.min(Math.max(editableSql.split('\n').length + 1, 3), 15)}
+                />
                 {result.explanation && (
                   <div className="px-3 md:px-4 py-2 md:py-3 border-t border-[var(--border-color)] bg-[var(--bg-primary)] text-xs md:text-sm text-[var(--text-secondary)]">
                     {result.explanation}
+                  </div>
+                )}
+                {isEditing && (
+                  <div className="px-3 md:px-4 py-2 border-t border-[var(--border-color)] flex items-center gap-2">
+                    <button
+                      onClick={handleRunModifiedSql}
+                      disabled={loading}
+                      className="px-3 py-1.5 text-sm bg-indigo-500 text-white rounded hover:bg-indigo-600 transition-colors disabled:opacity-50"
+                    >
+                      {loading ? 'Running...' : 'Run Modified SQL'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditableSql(result.sql || '')
+                        setIsEditing(false)
+                      }}
+                      className="px-3 py-1.5 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                    >
+                      Reset
+                    </button>
                   </div>
                 )}
               </div>

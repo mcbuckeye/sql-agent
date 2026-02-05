@@ -29,3 +29,16 @@ class SavedVisualization(Base):
     chart_type = Column(String(50))
     chart_config = Column(JSONB)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class QueryFeedback(Base):
+    """Store user SQL corrections for learning/improvement."""
+    __tablename__ = "query_feedback"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    connection_id = Column(Integer, ForeignKey("connections.id"), nullable=False)
+    natural_language = Column(Text)
+    original_sql = Column(Text)
+    corrected_sql = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

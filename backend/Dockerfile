@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies and Microsoft ODBC Driver 17 for SQL Server
+# Install system dependencies and Microsoft ODBC Driver 18 for SQL Server
 RUN apt-get update && apt-get install -y \
     gcc \
     libpq-dev \
@@ -15,6 +15,18 @@ RUN apt-get update && apt-get install -y \
     && apt-get update \
     && ACCEPT_EULA=Y apt-get install -y msodbcsql18 \
     && rm -rf /var/lib/apt/lists/*
+
+# Create permissive OpenSSL config for legacy SQL Server TLS compatibility
+RUN echo 'openssl_conf = openssl_init\n\
+[openssl_init]\n\
+ssl_conf = ssl_sect\n\
+[ssl_sect]\n\
+system_default = system_default_sect\n\
+[system_default_sect]\n\
+MinProtocol = TLSv1\n\
+CipherString = DEFAULT:@SECLEVEL=0' > /etc/ssl/openssl-legacy.cnf
+
+ENV OPENSSL_CONF=/etc/ssl/openssl-legacy.cnf
 
 # Copy requirements first for caching
 COPY requirements.txt .

@@ -38,8 +38,8 @@ class DatabaseConnector:
             return f"mysql+pymysql://{username}:{password}@{host}:{port}/{database}"
         elif db_type == "mssql":
             port = port or 1433
-            # Encrypt=optional allows fallback when server doesn't support required TLS version
-            return f"mssql+pyodbc://{username}:{password}@{host}:{port}/{database}?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes&Encrypt=optional"
+            # Encrypt=no disables mandatory encryption (Driver 18 defaults to yes)
+            return f"mssql+pyodbc://{username}:{password}@{host}:{port}/{database}?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes&Encrypt=no"
         else:
             raise ValueError(f"Unsupported database type: {db_type}")
     

@@ -133,10 +133,12 @@ export function QueryPage() {
         } catch {}
       }
     } catch (err: any) {
+      // Check if response contains SQL even though there was an error
+      const responseData = err.response?.data
       setResult({
-        sql: '',
-        explanation: '',
-        error: err.response?.data?.detail || 'Query failed'
+        sql: responseData?.sql || '',
+        explanation: responseData?.explanation || '',
+        error: responseData?.error || responseData?.detail || err.message || 'Query failed'
       })
     } finally {
       setLoading(false)
@@ -370,9 +372,42 @@ export function QueryPage() {
               <p className="text-sm md:text-base text-center">Ask a question about your data</p>
             </div>
           ) : result.error ? (
-            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 md:p-4 text-red-500">
-              <p className="font-medium mb-2 text-sm md:text-base">Error</p>
-              <p className="text-sm">{result.error}</p>
+            <div className="space-y-3 md:space-y-4">
+              {/* Show SQL if it was generated, even with error */}
+              {result.sql && (
+                <div className="bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg overflow-hidden">
+                  <div className="flex items-center justify-between px-3 md:px-4 py-2 border-b border-[var(--border-color)]">
+                    <div className="flex items-center gap-2 text-xs md:text-sm">
+                      <Code className="w-4 h-4 text-indigo-500" />
+                      <span className="font-medium">Generated SQL</span>
+                    </div>
+                    <button
+                      onClick={copySql}
+                      className="p-1.5 rounded hover:bg-[var(--bg-primary)] transition-colors"
+                    >
+                      {copiedSql ? (
+                        <Check className="w-4 h-4 text-green-500" />
+                      ) : (
+                        <Copy className="w-4 h-4 text-[var(--text-secondary)]" />
+                      )}
+                    </button>
+                  </div>
+                  <pre className="p-3 md:p-4 overflow-x-auto text-xs md:text-sm">
+                    <code>{result.sql}</code>
+                  </pre>
+                  {result.explanation && (
+                    <div className="px-3 md:px-4 py-2 md:py-3 border-t border-[var(--border-color)] bg-[var(--bg-primary)] text-xs md:text-sm text-[var(--text-secondary)]">
+                      {result.explanation}
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* Error message */}
+              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 md:p-4 text-red-500">
+                <p className="font-medium mb-2 text-sm md:text-base">Execution Error</p>
+                <p className="text-sm whitespace-pre-wrap">{result.error}</p>
+              </div>
             </div>
           ) : (
             <div className="space-y-3 md:space-y-4">

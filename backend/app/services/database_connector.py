@@ -38,7 +38,7 @@ class DatabaseConnector:
             return f"mysql+pymysql://{username}:{password}@{host}:{port}/{database}"
         elif db_type == "mssql":
             port = port or 1433
-            return f"mssql+pyodbc://{username}:{password}@{host}:{port}/{database}?driver=ODBC+Driver+17+for+SQL+Server"
+            return f"mssql+pyodbc://{username}:{password}@{host}:{port}/{database}?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes"
         else:
             raise ValueError(f"Unsupported database type: {db_type}")
     

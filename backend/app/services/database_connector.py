@@ -63,48 +63,30 @@ class DatabaseConnector:
     def get_schema(self) -> Dict[str, Any]:
         """Get database schema information."""
         engine = self.connect()
-        inspector = inspect(engine)
         db_type = self.connection.db_type.lower()
         
+        # For MSSQL, use efficient batch query via INFORMATION_SCHEMA
+        if db_type == "mssql":
+            return self._get_mssql_schema(engine)
+        
+        # For other databases, use SQLAlchemy inspector
+        inspector = inspect(engine)
         tables = []
         
-        # For MSSQL, explicitly get tables from dbo schema
-        if db_type == "mssql":
-            table_names = inspector.get_table_names(schema="dbo")
-        else:
-            table_names = inspector.get_table_names()
-        
-        for table_name in table_names:
+        for table_name in inspector.get_table_names():
             columns = []
-            pk_columns = set()
-            
-            # Get primary keys
             try:
-                schema_arg = "dbo" if db_type == "mssql" else None
-                pk_info = inspector.get_pk_constraint(table_name, schema=schema_arg)
-                if pk_info:
-                    pk_columns = set(pk_info.get("constrained_columns", []))
-            except:
-                pass
-            
-            # Get foreign keys (skip for performance on large DBs)
-            fk_map = {}
-            
-            # Get columns
-            try:
-                schema_arg = "dbo" if db_type == "mssql" else None
-                for col in inspector.get_columns(table_name, schema=schema_arg):
+                for col in inspector.get_columns(table_name):
                     columns.append({
                         "name": col["name"],
                         "data_type": str(col["type"]),
                         "is_nullable": col.get("nullable", True),
-                        "is_primary_key": col["name"] in pk_columns,
-                        "foreign_key": fk_map.get(col["name"])
+                        "is_primary_key": False,
+                        "foreign_key": None
                     })
             except:
                 pass
             
-            # Skip row count - too slow on large databases
             tables.append({
                 "name": table_name,
                 "columns": columns,
@@ -112,6 +94,52 @@ class DatabaseConnector:
             })
         
         return {"tables": tables}
+    
+    def _get_mssql_schema(self, engine) -> Dict[str, Any]:
+        """Get MSSQL schema using efficient batch query."""
+        # Single query to get all columns for all tables in dbo schema
+        schema_query = text("""
+            SELECT 
+                t.TABLE_NAME,
+                c.COLUMN_NAME,
+                c.DATA_TYPE,
+                c.IS_NULLABLE,
+                CASE WHEN pk.COLUMN_NAME IS NOT NULL THEN 1 ELSE 0 END as IS_PRIMARY_KEY
+            FROM INFORMATION_SCHEMA.TABLES t
+            JOIN INFORMATION_SCHEMA.COLUMNS c 
+                ON t.TABLE_NAME = c.TABLE_NAME AND t.TABLE_SCHEMA = c.TABLE_SCHEMA
+            LEFT JOIN (
+                SELECT ku.TABLE_NAME, ku.COLUMN_NAME
+                FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
+                JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE ku
+                    ON tc.CONSTRAINT_NAME = ku.CONSTRAINT_NAME
+                WHERE tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
+                    AND tc.TABLE_SCHEMA = 'dbo'
+            ) pk ON c.TABLE_NAME = pk.TABLE_NAME AND c.COLUMN_NAME = pk.COLUMN_NAME
+            WHERE t.TABLE_SCHEMA = 'dbo' AND t.TABLE_TYPE = 'BASE TABLE'
+            ORDER BY t.TABLE_NAME, c.ORDINAL_POSITION
+        """)
+        
+        tables_dict = {}
+        with engine.connect() as conn:
+            result = conn.execute(schema_query)
+            for row in result:
+                table_name = row[0]
+                if table_name not in tables_dict:
+                    tables_dict[table_name] = {
+                        "name": table_name,
+                        "columns": [],
+                        "row_count": None
+                    }
+                tables_dict[table_name]["columns"].append({
+                    "name": row[1],
+                    "data_type": row[2],
+                    "is_nullable": row[3] == "YES",
+                    "is_primary_key": bool(row[4]),
+                    "foreign_key": None
+                })
+        
+        return {"tables": list(tables_dict.values())}
     
     def get_table_preview(self, table_name: str, limit: int = 5) -> Dict[str, Any]:
         """Get preview data from a table."""

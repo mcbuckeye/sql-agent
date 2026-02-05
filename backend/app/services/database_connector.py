@@ -64,46 +64,51 @@ class DatabaseConnector:
         """Get database schema information."""
         engine = self.connect()
         inspector = inspect(engine)
+        db_type = self.connection.db_type.lower()
         
         tables = []
-        for table_name in inspector.get_table_names():
+        
+        # For MSSQL, explicitly get tables from dbo schema
+        if db_type == "mssql":
+            table_names = inspector.get_table_names(schema="dbo")
+        else:
+            table_names = inspector.get_table_names()
+        
+        for table_name in table_names:
             columns = []
             pk_columns = set()
             
             # Get primary keys
-            pk_info = inspector.get_pk_constraint(table_name)
-            if pk_info:
-                pk_columns = set(pk_info.get("constrained_columns", []))
+            try:
+                schema_arg = "dbo" if db_type == "mssql" else None
+                pk_info = inspector.get_pk_constraint(table_name, schema=schema_arg)
+                if pk_info:
+                    pk_columns = set(pk_info.get("constrained_columns", []))
+            except:
+                pass
             
-            # Get foreign keys
+            # Get foreign keys (skip for performance on large DBs)
             fk_map = {}
-            for fk in inspector.get_foreign_keys(table_name):
-                for col in fk.get("constrained_columns", []):
-                    referred = f"{fk.get('referred_table')}.{fk.get('referred_columns', [''])[0]}"
-                    fk_map[col] = referred
             
             # Get columns
-            for col in inspector.get_columns(table_name):
-                columns.append({
-                    "name": col["name"],
-                    "data_type": str(col["type"]),
-                    "is_nullable": col.get("nullable", True),
-                    "is_primary_key": col["name"] in pk_columns,
-                    "foreign_key": fk_map.get(col["name"])
-                })
-            
-            # Get approximate row count (fast method)
             try:
-                with engine.connect() as conn:
-                    result = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
-                    row_count = result.scalar()
+                schema_arg = "dbo" if db_type == "mssql" else None
+                for col in inspector.get_columns(table_name, schema=schema_arg):
+                    columns.append({
+                        "name": col["name"],
+                        "data_type": str(col["type"]),
+                        "is_nullable": col.get("nullable", True),
+                        "is_primary_key": col["name"] in pk_columns,
+                        "foreign_key": fk_map.get(col["name"])
+                    })
             except:
-                row_count = None
+                pass
             
+            # Skip row count - too slow on large databases
             tables.append({
                 "name": table_name,
                 "columns": columns,
-                "row_count": row_count
+                "row_count": None
             })
         
         return {"tables": tables}
